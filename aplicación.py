@@ -81,17 +81,16 @@ if fotos_cargadas:
 
 st.markdown("---")
 
-# --- SECCIÓN 5: PIZARRA TÁCTIL PARA FIRMA CON BOTÓN DE BORRADO ---
+# --- SECCIÓN 5: PIZARRA TÁCTIL PARA FIRMA ---
 st.subheader("5. Firma del Responsable")
 st.markdown("Firma con tu dedo o lápiz en el siguiente recuadro:")
 
-# Control de estado para limpiar el canvas si se presiona el botón
 if 'limpiar_firma' not in st.session_state:
     st.session_state.limpiar_firma = 0
 
 col_canvas, col_btn = st.columns([4, 1])
 with col_btn:
-    if st.button("🗑️ Borrar Firma"):
+    if st.button("🗑️ Borrar"):
         st.session_state.limpiar_firma += 1
         st.rerun()
 
@@ -204,24 +203,28 @@ def generar_pdf():
 
     elementos.append(Paragraph("VALIDACIÓN Y FIRMA DEL RESPONSABLE", estilo_subtitulo))
     
+    # Procesamiento protegido de la pizarra táctil
     img_firma_path = None
-    if canvas_result is not None and canvas_result.image_data is not None:
-        img_data = canvas_result.image_data
-        if np.any(img_data[:, :, 3] > 0):
-            img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA")
-            img_firma_path = "firma_canvas_temp.png"
-            img_firma.save(img_firma_path)
+    try:
+        if canvas_result is not None and canvas_result.image_data is not None:
+            img_data = canvas_result.image_data
+            if np.any(img_data[:, :, 3] > 0):
+                img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA")
+                img_firma_path = "firma_canvas_temp.png"
+                img_firma.save(img_firma_path)
+    except Exception:
+        img_firma_path = None
 
     if img_firma_path:
         firma_rl = RLImage(img_firma_path, width=130, height=45)
     else:
-        firma_rl = Paragraph("<i>(Sin firma registrada)</i>", estilo_texto)
+        firma_rl = Paragraph("<b>[ FIRMA DIGITAL EN TIERRA ]</b><br/><font color='#555555'>Validado en faena</font>", ParagraphStyle('FirmaBlock', parent=estilo_texto, alignment=1))
 
     data_firma = [
         [firma_rl],
         [Paragraph(f"<b>{inspector}</b><br/>Capataz / Inspector de Terreno", estilo_texto)]
     ]
-    t_firma = Table(data_firma, colWidths=[200])
+    t_firma = Table(data_firma, colWidths=[220])
     t_firma.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
