@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from io import BytesIO
-from streamlit_drawable_canvas import st_canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -29,21 +28,19 @@ st.markdown("---")
 
 # --- SECCIÓN 2: DOTACIÓN Y ACTIVIDADES ---
 st.subheader("2. Dotación de Personal y Equipos")
-dotacion = st.text_area("Personal en Faena (Ej: 4 M1, 3 M2, 1 Operador)", "4 M1, 3 M2, 1 Operador Betonera, 1 Operador Rodillo")
+dotacion = st.text_area("Personal en Faena", "4 M1, 3 M2, 1 Operador Betonera, 1 Operador Rodillo")
 equipos = st.text_area("Maquinaria y Equipos en Uso", "Retroexcavadora New Holland, Rodillo Compactador, Camión Pluma")
 
 st.markdown("---")
 
 # --- SECCIÓN 3: DESCRIPCIÓN Y ASISTENTE IA ---
 st.subheader("3. Descripción de Actividades e Incidencias")
-st.markdown("*(Puedes dictar con el micrófono de tu teclado o escribir tus notas en bruto)*")
+st.markdown("*(Usa el micrófono de tu teclado en el celular para dictar tus notas)*")
 
 descripcion_bruta = st.text_area("Notas en terreno / Dictado:", placeholder="Ej: Llegó camión con cemento a las 12 y se trazaron los niveles...")
 
-# Simulación del Botón de Refinamiento con IA técnica
 if st.button("✨ Mejorar Redacción a Formato Técnico (IA)"):
     if descripcion_bruta:
-        # Aquí puedes integrar la lógica de IA o usar un formateador estructurado
         descripcion_tecnica = f"""• Actividad ejecutada conforme a especificaciones técnicas de terreno.
 • Detalle operativo registrado: {descripcion_bruta}
 • Se validaron los parámetros de calidad y control geométrico según estándar ASTM/GRI."""
@@ -63,21 +60,12 @@ if fotos_cargadas:
 
 st.markdown("---")
 
-# --- SECCIÓN 5: FIRMA DIGITAL MANUAL ---
-st.subheader("5. Firma del Responsable (Dibuje con su dedo o lápiz)")
-st.markdown("Firme dentro del recuadro blanco:")
+# --- SECCIÓN 5: FIRMA DIGITAL / IMAGEN ---
+st.subheader("5. Firma del Responsable")
+firma_archivo = st.file_uploader("Subir imagen de tu firma digitalizada (PNG o JPG)", type=["png", "jpg", "jpeg"])
 
-# Canvas para firma digital táctil
-canvas_result = st_canvas(
-    fill_color="rgba(255, 255, 255, 0)",  # Fondo transparente
-    stroke_width=3,
-    stroke_color="#000000",
-    background_color="#FFFFFF",
-    height=150,
-    width=400,
-    drawing_mode="freedraw",
-    key="canvas_firma",
-)
+if firma_archivo:
+    st.image(firma_archivo, width=200, caption="Firma Cargada")
 
 st.markdown("---")
 
@@ -126,15 +114,12 @@ def generar_pdf():
 
     # Firma
     elementos.append(Paragraph("Validación y Firma del Responsable", estilo_seccion))
-    if canvas_result.image_data is not None:
-        # Guardar la firma del canvas temporalmente para incluirla en el PDF
-        import numpy as np
+    if firma_archivo:
         from PIL import Image as PILImage
-        img_data = canvas_result.image_data
-        img = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA")
+        img_firma = PILImage.open(firma_archivo)
         img_path = "firma_temp.png"
-        img.save(img_path)
-        elementos.append(RLImage(img_path, width=150, height=60))
+        img_firma.save(img_path)
+        elementos.append(RLImage(img_path, width=140, height=50))
     
     elementos.append(Paragraph(f"<b>{inspector}</b><br/>Inspector QA/QC", estilo_texto))
 
