@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 from io import BytesIO
 from PIL import Image as PILImage
+import numpy as np
 from streamlit_drawable_canvas import st_canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
@@ -225,14 +226,13 @@ def generar_pdf():
 
     elementos.append(Paragraph("VALIDACIÓN Y FIRMA DEL RESPONSABLE", estilo_subtitulo))
     
-    # Captura directa y segura de la firma desde el componente st_canvas
+    # Extracción directa y blindada de la matriz de la firma del canvas
     img_firma_path = None
     try:
-        if canvas_result is not None and canvas_result.json_data is not None:
-            # Verificamos si hay trazos dibujados en el objeto JSON del canvas
-            objects = canvas_result.json_data["objects"]
-            if len(objects) > 0 and canvas_result.image_data is not None:
-                img_data = canvas_result.image_data
+        if canvas_result is not None and canvas_result.image_data is not None:
+            img_data = canvas_result.image_data
+            # Comprobamos que el canvas tenga datos dibujados transformándolos a imagen PIL
+            if isinstance(img_data, np.ndarray) and img_data.size > 0:
                 img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA").convert("RGB")
                 img_firma_path = "firma_canvas_temp.png"
                 img_firma.save(img_firma_path)
@@ -240,9 +240,9 @@ def generar_pdf():
         img_firma_path = None
 
     if img_firma_path:
-        firma_rl = RLImage(img_firma_path, width=160, height=60)
+        firma_rl = RLImage(img_firma_path, width=150, height=55)
     else:
-        firma_rl = Paragraph("<i>(Firma pendiente o dibuje en la pizarra)</i>", estilo_texto)
+        firma_rl = Paragraph("<i>(Firma pendiente)</i>", estilo_texto)
 
     data_firma = [
         [firma_rl],
