@@ -2,14 +2,26 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from io import BytesIO
+from PIL import Image as PILImage
+import numpy as np
+from streamlit_drawable_canvas import st_canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-st.set_page_config(page_title="QA/QC - Informe de Terreno", page_icon="🏗️", layout="centered")
+st.set_page_config(page_title="Informe de Terreno", page_icon="🏗️", layout="centered")
 
-st.title("🏗️ Generador de Informes de Terreno QA/QC")
+# Estilo visual general en Streamlit
+st.markdown("""
+    <style>
+    .main { background-color: #F8F9FA; }
+    h1 { color: #1B365D; font-family: 'Helvetica Neue', sans-serif; }
+    h2, h3 { color: #2C3E50; }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("🏗️ Generador de Informes de Terreno")
 st.markdown("---")
 
 # --- SECCIÓN 1: DATOS GENERALES ---
@@ -43,7 +55,7 @@ if st.button("✨ Mejorar Redacción a Formato Técnico (IA)"):
     if descripcion_bruta:
         descripcion_tecnica = f"""• Actividad ejecutada conforme a especificaciones técnicas de terreno.
 • Detalle operativo registrado: {descripcion_bruta}
-• Se validaron los parámetros de calidad y control geométrico según estándar ASTM/GRI."""
+• Se validaron los parámetros de control geométrico y avance según programa."""
         st.success("¡Texto optimizado a lenguaje técnico con éxito!")
         st.text_area("Texto Técnico Generado:", value=descripcion_tecnica, height=120)
     else:
@@ -55,73 +67,171 @@ st.markdown("---")
 st.subheader("4. Registro Fotográfico")
 fotos_cargadas = st.file_uploader("Adjuntar Fotografías de Faena", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
+lista_imagenes_temp = []
 if fotos_cargadas:
-    st.image(fotos_cargadas, width=250, caption=[f"Foto {i+1}" for i in range(len(fotos_cargadas))])
+    st.info(f"Se han cargado {len(fotos_cargadas)} fotografía(s).")
+    cols = st.columns(min(len(fotos_cargadas), 3))
+    for i, foto in enumerate(fotos_cargadas):
+        img_pil = PILImage.open(foto)
+        with cols[i % 3]:
+            st.image(img_pil, caption=f"Foto {i+1}", use_container_width=True)
+        # Guardar temporalmente para el PDF
+        temp_path = f"foto_temp_{i}.png"
+        img_pil.save(temp_path)
+        lista_imagenes_temp.append(temp_path)
 
 st.markdown("---")
 
-# --- SECCIÓN 5: FIRMA DIGITAL / IMAGEN ---
+# --- SECCIÓN 5: PIZARRA TÁCTIL PARA FIRMA ---
 st.subheader("5. Firma del Responsable")
-firma_archivo = st.file_uploader("Subir imagen de tu firma digitalizada (PNG o JPG)", type=["png", "jpg", "jpeg"])
+st.markdown("Firma con tu dedo o lápiz en el siguiente recuadro:")
 
-if firma_archivo:
-    st.image(firma_archivo, width=200, caption="Firma Cargada")
+canvas_result = st_canvas(
+    fill_color="rgba(255, 255, 255, 0)",
+    stroke_width=3,
+    stroke_color="#000000",
+    background_color="#FFFFFF",
+    height=140,
+    width=380,
+    drawing_mode="freedraw",
+    key="canvas_firma",
+)
 
 st.markdown("---")
 
-# --- GENERACIÓN DEL PDF ---
+# --- GENERACIÓN DEL PDF ESTÉTICO ---
 def generar_pdf():
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elementos = []
     
-    styles = getSampleStyleSheet()
-    estilo_titulo = ParagraphStyle('TituloDoc', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#1A2B4C'), alignment=1)
-    estilo_seccion = ParagraphStyle('SeccionDoc', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor('#2C3E50'), spaceBefore=10)
-    estilo_texto = ParagraphStyle('TextoDoc', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#333333'))
+    # Paleta de Colores Corporativa / Industrial
+    COLOR_PRIMARIO = colors.HexColor('#1B365D')  # Azul Marino Oscuro
+    COLOR_SECUNDARIO = colors.HexColor('#2C3E50') # Gris Acero
+    COLOR_FONDO_TABLA = colors.HexColor('#F2F4F7') # Gris muy claro
+    COLOR_BORDE = colors.HexColor('#CBD5E1')
 
-    # Encabezado
-    elementos.append(Paragraph("INFORME TÉCNICO DE AVANCE DE OBRA - QA/QC", estilo_titulo))
+    styles = getSampleStyleSheet()
+    estilo_titulo = ParagraphStyle('TituloDoc', parent=styles['Heading1'], fontSize=15, textColor=COLOR_PRIMARIO, alignment=1, fontName="Helvetica-Bold", spaceAfter=6)
+    estilo_subtitulo = ParagraphStyle('SubTituloDoc', parent=styles['Heading2'], fontSize=11, textColor=COLOR_PRIMARIO, fontName="Helvetica-Bold", spaceBefore=10, spaceAfter=4)
+    estilo_texto = ParagraphStyle('TextoDoc', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#333333'), leading=12)
+    estilo_etiqueta = ParagraphStyle('EtiquetaDoc', parent=styles['Normal'], fontSize=9, textColor=COLOR_PRIMARIO, fontName="Helvetica-Bold")
+
+    # Encabezado con estilo bloque corporativo
+    elementos.append(Paragraph("INFORME TÉCNICO DE AVANCE DE OBRA", estilo_titulo))
+    elementos.append(Paragraph("Control de Operaciones y Faena en Terreno", ParagraphStyle('Sub', parent=estilo_titulo, fontSize=10, textColor=COLOR_SECUNDARIO)))
     elementos.append(Spacer(1, 10))
 
-    # Tabla de Datos Generales
+    # Tabla de Datos Generales (Estética y limpia)
     data_general = [
-        [Paragraph(f"<b>Proyecto:</b> {proyecto}", estilo_texto), Paragraph(f"<b>Fecha:</b> {str(fecha_informe)}", estilo_texto)],
-        [Paragraph(f"<b>Cliente:</b> {cliente}", estilo_texto), Paragraph(f"<b>N° Informe:</b> {n_informe}", estilo_texto)],
-        [Paragraph(f"<b>Ubicación:</b> {ubicacion}", estilo_texto), Paragraph(f"<b>Inspector:</b> {inspector}", estilo_texto)]
+        [Paragraph("<b>Proyecto / Obra:</b>", estilo_etiqueta), Paragraph(proyecto, estilo_texto), Paragraph("<b>Fecha:</b>", estilo_etiqueta), Paragraph(str(fecha_informe), estilo_texto)],
+        [Paragraph("<b>Cliente:</b>", estilo_etiqueta), Paragraph(cliente, estilo_texto), Paragraph("<b>N° Informe:</b>", estilo_etiqueta), Paragraph(n_informe, estilo_texto)],
+        [Paragraph("<b>Ubicación:</b>", estilo_etiqueta), Paragraph(ubicacion, estilo_texto), Paragraph("<b>Inspector:</b>", estilo_etiqueta), Paragraph(inspector, estilo_texto)]
     ]
-    t_general = Table(data_general, colWidths=[270, 270])
+    t_general = Table(data_general, colWidths=[90, 180, 70, 200])
     t_general.setStyle(TableStyle([
-        ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#BDC3C7')),
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8F9F9')),
+        ('BACKGROUND', (0,0), (-1,-1), COLOR_FONDO_TABLA),
+        ('BOX', (0,0), (-1,-1), 1, COLOR_BORDE),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('PADDING', (0,0), (-1,-1), 6),
+        ('PADDING', (0,0), (-1,-1), 5),
+        ('GRID', (0,0), (-1,-1), 0.5, COLOR_BORDE),
     ]))
     elementos.append(t_general)
-    elementos.append(Spacer(1, 15))
+    elementos.append(Spacer(1, 10))
 
     # Dotación y Recursos
-    elementos.append(Paragraph("Recursos en Faena", estilo_seccion))
-    elementos.append(Paragraph(f"<b>Personal:</b> {dotacion}", estilo_texto))
-    elementos.append(Paragraph(f"<b>Equipos:</b> {equipos}", estilo_texto))
-    elementos.append(Spacer(1, 15))
+    elementos.append(Paragraph("RECURSOS Y DOTACIÓN EN FAENA", estilo_subtitulo))
+    data_recursos = [
+        [Paragraph("<b>Personal Asignado:</b>", estilo_etiqueta), Paragraph(dotacion, estilo_texto)],
+        [Paragraph("<b>Maquinaria / Equipos:</b>", estilo_etiqueta), Paragraph(equipos, estilo_texto)]
+    ]
+    t_recursos = Table(data_recursos, colWidths=[120, 420])
+    t_recursos.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 1, COLOR_BORDE),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('PADDING', (0,0), (-1,-1), 5),
+        ('BACKGROUND', (0,0), (0,-1), colors.HexColor('#EBF1F6')),
+        ('GRID', (0,0), (-1,-1), 0.5, COLOR_BORDE),
+    ]))
+    elementos.append(t_recursos)
+    elementos.append(Spacer(1, 10))
 
-    # Actividades
-    elementos.append(Paragraph("Descripción de Actividades e Incidencias", estilo_seccion))
-    texto_actividad = descripcion_bruta if descripcion_bruta else "Sin observaciones registradas."
-    elementos.append(Paragraph(texto_actividad.replace('\n', '<br/>'), estilo_texto))
-    elementos.append(Spacer(1, 20))
+    # Descripción de Actividades
+    elementos.append(Paragraph("DESCRIPCIÓN DE ACTIVIDADES E INCIDENCIAS", estilo_subtitulo))
+    texto_actividad = descripcion_bruta if descripcion_bruta else "Sin observaciones registradas en la jornada."
+    data_actividades = [[Paragraph(texto_actividad.replace('\n', '<br/>'), estilo_texto)]]
+    t_actividades = Table(data_actividades, colWidths=[540])
+    t_actividades.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 1, COLOR_BORDE),
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#FFFFFF')),
+        ('PADDING', (0,0), (-1,-1), 8),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+    ]))
+    elementos.append(t_actividades)
+    elementos.append(Spacer(1, 10))
 
-    # Firma
-    elementos.append(Paragraph("Validación y Firma del Responsable", estilo_seccion))
-    if firma_archivo:
-        from PIL import Image as PILImage
-        img_firma = PILImage.open(firma_archivo)
-        img_path = "firma_temp.png"
-        img_firma.save(img_path)
-        elementos.append(RLImage(img_path, width=140, height=50))
+    # Registro Fotográfico en el PDF
+    if lista_imagenes_temp:
+        elementos.append(Paragraph("REGISTRO FOTOGRÁFICO", estilo_subtitulo))
+        filas_fotos = []
+        fila_actual = []
+        
+        for i, img_path in enumerate(lista_imagenes_temp):
+            img_pdf = RLImage(img_path, width=160, height=120)
+            celda_foto = [img_pdf, Paragraph(f"<b>Figura {i+1}:</b> Evidencia en terreno", ParagraphStyle('Cap', parent=estilo_texto, fontSize=8, alignment=1))]
+            fila_actual.append(celda_foto)
+            
+            if len(fila_actual) == 2:
+                filas_fotos.append(fila_actual)
+                fila_actual = []
+        
+        if fila_actual:
+            while len(fila_actual) < 2:
+                fila_actual.append("")
+            filas_fotos.append(fila_actual)
+            
+        t_fotos = Table(filas_fotos, colWidths=[270, 270])
+        t_fotos.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('PADDING', (0,0), (-1,-1), 6),
+            ('BOX', (0,0), (-1,-1), 1, COLOR_BORDE),
+            ('GRID', (0,0), (-1,-1), 0.5, COLOR_BORDE),
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#FAFAFA')),
+        ]))
+        elementos.append(t_fotos)
+        elementos.append(Spacer(1, 10))
+
+    # Firma y Validación
+    elementos.append(Paragraph("VALIDACIÓN Y FIRMA DEL RESPONSABLE", estilo_subtitulo))
     
-    elementos.append(Paragraph(f"<b>{inspector}</b><br/>Inspector QA/QC", estilo_texto))
+    img_firma_path = None
+    if canvas_result.image_data is not None:
+        img_data = canvas_result.image_data
+        # Verificar si se dibujó algo (no todo blanco)
+        if np.any(img_data[:, :, 3] > 0):
+            img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA")
+            img_firma_path = "firma_canvas_temp.png"
+            img_firma.save(img_firma_path)
+
+    if img_firma_path:
+        firma_rl = RLImage(img_firma_path, width=140, height=50)
+    else:
+        firma_rl = Paragraph("<i>(Sin firma registrada)</i>", estilo_texto)
+
+    data_firma = [
+        [firma_rl],
+        [Paragraph(f"<b>{inspector}</b><br/>Capataz / Inspector de Terreno", estilo_texto)]
+    ]
+    t_firma = Table(data_firma, colWidths=[200])
+    t_firma.setStyle(TableStyle([
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOX', (0,0), (-1,-1), 1, COLOR_BORDE),
+        ('BACKGROUND', (0,0), (-1,-1), COLOR_FONDO_TABLA),
+        ('PADDING', (0,0), (-1,-1), 6),
+    ]))
+    elementos.append(t_firma)
 
     doc.build(elementos)
     buffer.seek(0)
