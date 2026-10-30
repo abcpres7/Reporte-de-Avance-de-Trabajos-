@@ -36,6 +36,14 @@ with col2:
     fecha_informe = st.date_input("Fecha del Informe", datetime.now())
     n_informe = st.text_input("N° de Informe", "01-2026")
     inspector = st.text_input("Elaborado por (Encargado)", "Johnny Arias Cano")
+    empresa_contratista = st.text_input("Empresa / Contratista", "Geosix")
+
+# Subsección Clima en Faena
+col_c1, col_c2 = st.columns(2)
+with col_c1:
+    temperatura = st.text_input("Temperatura Estimada", "18°C (Despejado)")
+with col_c2:
+    condicion_clima = st.text_input("Condición Climática / Viento", "Viento normal / Faena operativa")
 
 st.markdown("---")
 
@@ -48,7 +56,7 @@ st.markdown("---")
 
 # --- SECCIÓN 3: DESCRIPCIÓN Y ASISTENTE IA ---
 st.subheader("3. Descripción de Actividades e Incidencias")
-st.markdown("*(Usa el micrófono de tu teclado en el celular para dictar tus notas. Puedes usar **negrita** con asteriscos o superíndices en texto)*")
+st.markdown("*(Usa el micrófono de tu teclado en el celular para dictar tus notas. Puedes usar **negrita** escribiendo asteriscos)*")
 
 descripcion_bruta = st.text_area("Notas en terreno / Dictado:", placeholder="Ej: Se estableció el nivel de referencia en Piscina N°6...")
 
@@ -82,9 +90,9 @@ if fotos_cargadas:
 
 st.markdown("---")
 
-# --- SECCIÓN 5: PIZARRA TÁCTIL PARA FIRMA CON BOTÓN DE BORRADO ---
+# --- SECCIÓN 5: PIZARRA TÁCTIL PARA FIRMA ---
 st.subheader("5. Firma del Responsable")
-st.markdown("Firma con tu dedo o lápiz en el siguiente recuadro:")
+st.markdown("Dibuja tu firma claramente con el dedo o lápiz en el recuadro:")
 
 if 'limpiar_firma' not in st.session_state:
     st.session_state.limpiar_firma = 0
@@ -97,21 +105,33 @@ with col_btn:
 
 canvas_result = st_canvas(
     fill_color="rgba(255, 255, 255, 1)",
-    stroke_width=3,
-    stroke_color="#000000",
+    stroke_width=4,  # Trazo más grueso para que se note perfecto
+    stroke_color="#1B365D",  # Azul marino corporativo en el trazo
     background_color="#FFFFFF",
-    height=130,
-    width=340,
+    height=140,
+    width=350,
     drawing_mode="freedraw",
     key=f"canvas_firma_{st.session_state.limpiar_firma}",
 )
 
 st.markdown("---")
 
+# --- FUNCIÓN PARA PIE DE PÁGINA ---
+def add_footer(canvas, doc):
+    canvas.saveState()
+    canvas.setFont('Helvetica', 8)
+    canvas.setFillColor(colors.HexColor('#555555'))
+    canvas.setStrokeColor(colors.HexColor('#CBD5E1'))
+    canvas.setLineWidth(0.5)
+    canvas.line(36, 30, letter[0] - 36, 30)
+    canvas.drawString(36, 18, f"Informe Técnico de Avance | Proyecto: {proyecto}")
+    canvas.drawRightString(letter[0] - 36, 18, f"Pág. {doc.page}")
+    canvas.restoreState()
+
 # --- GENERACIÓN DEL PDF ESTÉTICO ---
 def generar_pdf():
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=45)
     elementos = []
     
     COLOR_PRIMARIO = colors.HexColor('#1B365D')
@@ -132,9 +152,10 @@ def generar_pdf():
     data_general = [
         [Paragraph("<b>Proyecto / Obra:</b>", estilo_etiqueta), Paragraph(proyecto, estilo_texto), Paragraph("<b>Fecha:</b>", estilo_etiqueta), Paragraph(str(fecha_informe), estilo_texto)],
         [Paragraph("<b>Cliente:</b>", estilo_etiqueta), Paragraph(cliente, estilo_texto), Paragraph("<b>N° Informe:</b>", estilo_etiqueta), Paragraph(n_informe, estilo_texto)],
-        [Paragraph("<b>Ubicación:</b>", estilo_etiqueta), Paragraph(ubicacion, estilo_texto), Paragraph("<b>Encargado:</b>", estilo_etiqueta), Paragraph(inspector, estilo_texto)]
+        [Paragraph("<b>Ubicación:</b>", estilo_etiqueta), Paragraph(ubicacion, estilo_texto), Paragraph("<b>Encargado:</b>", estilo_etiqueta), Paragraph(inspector, estilo_texto)],
+        [Paragraph("<b>Clima / Temp:</b>", estilo_etiqueta), Paragraph(f"{temperatura} - {condicion_clima}", estilo_texto), Paragraph("<b>Estado Faena:</b>", estilo_etiqueta), Paragraph("Operativa / En curso", estilo_texto)]
     ]
-    t_general = Table(data_general, colWidths=[90, 180, 70, 200])
+    t_general = Table(data_general, colWidths=[90, 180, 80, 190])
     t_general.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), COLOR_FONDO_TABLA),
         ('BOX', (0,0), (-1,-1), 1, COLOR_BORDE),
@@ -205,40 +226,39 @@ def generar_pdf():
 
     elementos.append(Paragraph("VALIDACIÓN Y FIRMA DEL RESPONSABLE", estilo_subtitulo))
     
-    # Procesamiento robusto de la pizarra táctil
+    # Procesamiento limpio y directo de la firma táctil estilo Obsiva
     img_firma_path = None
     try:
         if canvas_result is not None and canvas_result.image_data is not None:
             img_data = canvas_result.image_data
             if img_data.shape[0] > 0 and img_data.shape[1] > 0:
-                img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA")
-                background = PILImage.new("RGB", img_firma.size, (255, 255, 255))
-                background.paste(img_firma, mask=img_firma.split()[3])
+                img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA").convert("RGB")
                 img_firma_path = "firma_canvas_temp.png"
-                background.save(img_firma_path)
+                img_firma.save(img_firma_path)
     except Exception:
         img_firma_path = None
 
     if img_firma_path:
-        firma_rl = RLImage(img_firma_path, width=130, height=45)
+        firma_rl = RLImage(img_firma_path, width=160, height=60)
     else:
         firma_rl = Paragraph("<i>(Firma pendiente)</i>", estilo_texto)
 
+    # Estructura limpia de firma idéntica al estándar de Obsiva
     data_firma = [
         [firma_rl],
-        [Paragraph(f"<b>{inspector}</b><br/>Encargado de Terreno", estilo_texto)]
+        [Paragraph("<b>Elaborado por</b>", ParagraphStyle('T1', parent=estilo_texto, fontName="Helvetica-Bold", fontSize=10))],
+        [Paragraph(f"{inspector} · {empresa_contratista}", ParagraphStyle('T2', parent=estilo_texto, fontSize=9, textColor=colors.HexColor('#555555')))]
     ]
-    t_firma = Table(data_firma, colWidths=[200])
+    t_firma = Table(data_firma, colWidths=[220])
     t_firma.setStyle(TableStyle([
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('BOX', (0,0), (-1,-1), 1, COLOR_BORDE),
-        ('BACKGROUND', (0,0), (-1,-1), COLOR_FONDO_TABLA),
-        ('PADDING', (0,0), (-1,-1), 6),
+        ('LINEBELOW', (0,0), (0,0), 1, COLOR_PRIMARIO),  # Línea de firma exacta debajo del trazo
+        ('PADDING', (0,0), (-1,-1), 4),
     ]))
     elementos.append(t_firma)
 
-    doc.build(elementos)
+    doc.build(elementos, onFirstPage=add_footer, onLaterPages=add_footer)
     buffer.seek(0)
     return buffer
 
