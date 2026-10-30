@@ -9,6 +9,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 
 st.set_page_config(page_title="Informe de Terreno", page_icon="🏗️", layout="centered")
 
@@ -34,7 +35,7 @@ with col1:
 with col2:
     fecha_informe = st.date_input("Fecha del Informe", datetime.now())
     n_informe = st.text_input("N° de Informe", "01-2026")
-    inspector = st.text_input("Elaborado por (Inspector / Capataz)", "Johnny Arias Cano")
+    inspector = st.text_input("Elaborado por (Encargado)", "Johnny Arias Cano")
 
 st.markdown("---")
 
@@ -47,9 +48,9 @@ st.markdown("---")
 
 # --- SECCIÓN 3: DESCRIPCIÓN Y ASISTENTE IA ---
 st.subheader("3. Descripción de Actividades e Incidencias")
-st.markdown("*(Usa el micrófono de tu teclado en el celular para dictar tus notas)*")
+st.markdown("*(Usa el micrófono de tu teclado en el celular para dictar tus notas. Puedes usar **negrita** con asteriscos o superíndices en texto)*")
 
-descripcion_bruta = st.text_area("Notas en terreno / Dictado:", placeholder="Ej: Llegó camión con cemento a las 12 y se trazaron los niveles...")
+descripcion_bruta = st.text_area("Notas en terreno / Dictado:", placeholder="Ej: Se estableció el nivel de referencia en Piscina N°6...")
 
 if st.button("✨ Mejorar Redacción a Formato Técnico (IA)"):
     if descripcion_bruta:
@@ -81,7 +82,7 @@ if fotos_cargadas:
 
 st.markdown("---")
 
-# --- SECCIÓN 5: PIZARRA TÁCTIL PARA FIRMA ---
+# --- SECCIÓN 5: PIZARRA TÁCTIL PARA FIRMA CON BOTÓN DE BORRADO ---
 st.subheader("5. Firma del Responsable")
 st.markdown("Firma con tu dedo o lápiz en el siguiente recuadro:")
 
@@ -95,7 +96,7 @@ with col_btn:
         st.rerun()
 
 canvas_result = st_canvas(
-    fill_color="rgba(255, 255, 255, 0)",
+    fill_color="rgba(255, 255, 255, 1)",
     stroke_width=3,
     stroke_color="#000000",
     background_color="#FFFFFF",
@@ -121,7 +122,7 @@ def generar_pdf():
     styles = getSampleStyleSheet()
     estilo_titulo = ParagraphStyle('TituloDoc', parent=styles['Heading1'], fontSize=15, textColor=COLOR_PRIMARIO, alignment=1, fontName="Helvetica-Bold", spaceAfter=4)
     estilo_subtitulo = ParagraphStyle('SubTituloDoc', parent=styles['Heading2'], fontSize=11, textColor=COLOR_PRIMARIO, fontName="Helvetica-Bold", spaceBefore=10, spaceAfter=4)
-    estilo_texto = ParagraphStyle('TextoDoc', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#333333'), leading=12)
+    estilo_texto = ParagraphStyle('TextoDoc', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#333333'), leading=13, alignment=TA_JUSTIFY)
     estilo_etiqueta = ParagraphStyle('EtiquetaDoc', parent=styles['Normal'], fontSize=9, textColor=COLOR_PRIMARIO, fontName="Helvetica-Bold")
 
     elementos.append(Paragraph("INFORME TÉCNICO DE AVANCE DE OBRA", estilo_titulo))
@@ -131,7 +132,7 @@ def generar_pdf():
     data_general = [
         [Paragraph("<b>Proyecto / Obra:</b>", estilo_etiqueta), Paragraph(proyecto, estilo_texto), Paragraph("<b>Fecha:</b>", estilo_etiqueta), Paragraph(str(fecha_informe), estilo_texto)],
         [Paragraph("<b>Cliente:</b>", estilo_etiqueta), Paragraph(cliente, estilo_texto), Paragraph("<b>N° Informe:</b>", estilo_etiqueta), Paragraph(n_informe, estilo_texto)],
-        [Paragraph("<b>Ubicación:</b>", estilo_etiqueta), Paragraph(ubicacion, estilo_texto), Paragraph("<b>Inspector:</b>", estilo_etiqueta), Paragraph(inspector, estilo_texto)]
+        [Paragraph("<b>Ubicación:</b>", estilo_etiqueta), Paragraph(ubicacion, estilo_texto), Paragraph("<b>Encargado:</b>", estilo_etiqueta), Paragraph(inspector, estilo_texto)]
     ]
     t_general = Table(data_general, colWidths=[90, 180, 70, 200])
     t_general.setStyle(TableStyle([
@@ -162,7 +163,8 @@ def generar_pdf():
 
     elementos.append(Paragraph("DESCRIPCIÓN DE ACTIVIDADES E INCIDENCIAS", estilo_subtitulo))
     texto_actividad = descripcion_bruta if descripcion_bruta else "Sin observaciones registradas en la jornada."
-    data_actividades = [[Paragraph(texto_actividad.replace('\n', '<br/>'), estilo_texto)]]
+    texto_formateado = texto_actividad.replace('\n', '<br/>').replace('**', '<b>')
+    data_actividades = [[Paragraph(texto_formateado, estilo_texto)]]
     t_actividades = Table(data_actividades, colWidths=[540])
     t_actividades.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 1, COLOR_BORDE),
@@ -179,7 +181,7 @@ def generar_pdf():
         fila_actual = []
         for i, img_path in enumerate(lista_imagenes_temp):
             img_pdf = RLImage(img_path, width=160, height=120)
-            celda_foto = [img_pdf, Paragraph(f"<b>Figura {i+1}:</b> Evidencia en terreno", ParagraphStyle('Cap', parent=estilo_texto, fontSize=8, alignment=1))]
+            celda_foto = [img_pdf, Paragraph(f"<b>Figura {i+1}:</b> Evidencia en terreno", ParagraphStyle('Cap', parent=estilo_texto, fontSize=8, alignment=TA_CENTER))]
             fila_actual.append(celda_foto)
             if len(fila_actual) == 2:
                 filas_fotos.append(fila_actual)
@@ -203,28 +205,30 @@ def generar_pdf():
 
     elementos.append(Paragraph("VALIDACIÓN Y FIRMA DEL RESPONSABLE", estilo_subtitulo))
     
-    # Procesamiento protegido de la pizarra táctil
+    # Procesamiento robusto de la pizarra táctil
     img_firma_path = None
     try:
         if canvas_result is not None and canvas_result.image_data is not None:
             img_data = canvas_result.image_data
-            if np.any(img_data[:, :, 3] > 0):
+            if img_data.shape[0] > 0 and img_data.shape[1] > 0:
                 img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA")
+                background = PILImage.new("RGB", img_firma.size, (255, 255, 255))
+                background.paste(img_firma, mask=img_firma.split()[3])
                 img_firma_path = "firma_canvas_temp.png"
-                img_firma.save(img_firma_path)
+                background.save(img_firma_path)
     except Exception:
         img_firma_path = None
 
     if img_firma_path:
         firma_rl = RLImage(img_firma_path, width=130, height=45)
     else:
-        firma_rl = Paragraph("<b>[ FIRMA DIGITAL EN TIERRA ]</b><br/><font color='#555555'>Validado en faena</font>", ParagraphStyle('FirmaBlock', parent=estilo_texto, alignment=1))
+        firma_rl = Paragraph("<i>(Firma pendiente)</i>", estilo_texto)
 
     data_firma = [
         [firma_rl],
-        [Paragraph(f"<b>{inspector}</b><br/>Capataz / Inspector de Terreno", estilo_texto)]
+        [Paragraph(f"<b>{inspector}</b><br/>Encargado de Terreno", estilo_texto)]
     ]
-    t_firma = Table(data_firma, colWidths=[220])
+    t_firma = Table(data_firma, colWidths=[200])
     t_firma.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
