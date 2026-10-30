@@ -3,7 +3,6 @@ import pandas as pd
 from datetime import datetime
 from io import BytesIO
 from PIL import Image as PILImage
-import numpy as np
 from streamlit_drawable_canvas import st_canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
@@ -105,8 +104,8 @@ with col_btn:
 
 canvas_result = st_canvas(
     fill_color="rgba(255, 255, 255, 1)",
-    stroke_width=4,  # Trazo más grueso para que se note perfecto
-    stroke_color="#1B365D",  # Azul marino corporativo en el trazo
+    stroke_width=4,
+    stroke_color="#1B365D",
     background_color="#FFFFFF",
     height=140,
     width=350,
@@ -226,12 +225,14 @@ def generar_pdf():
 
     elementos.append(Paragraph("VALIDACIÓN Y FIRMA DEL RESPONSABLE", estilo_subtitulo))
     
-    # Procesamiento limpio y directo de la firma táctil estilo Obsiva
+    # Captura directa y segura de la firma desde el componente st_canvas
     img_firma_path = None
     try:
-        if canvas_result is not None and canvas_result.image_data is not None:
-            img_data = canvas_result.image_data
-            if img_data.shape[0] > 0 and img_data.shape[1] > 0:
+        if canvas_result is not None and canvas_result.json_data is not None:
+            # Verificamos si hay trazos dibujados en el objeto JSON del canvas
+            objects = canvas_result.json_data["objects"]
+            if len(objects) > 0 and canvas_result.image_data is not None:
+                img_data = canvas_result.image_data
                 img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA").convert("RGB")
                 img_firma_path = "firma_canvas_temp.png"
                 img_firma.save(img_firma_path)
@@ -241,9 +242,8 @@ def generar_pdf():
     if img_firma_path:
         firma_rl = RLImage(img_firma_path, width=160, height=60)
     else:
-        firma_rl = Paragraph("<i>(Firma pendiente)</i>", estilo_texto)
+        firma_rl = Paragraph("<i>(Firma pendiente o dibuje en la pizarra)</i>", estilo_texto)
 
-    # Estructura limpia de firma idéntica al estándar de Obsiva
     data_firma = [
         [firma_rl],
         [Paragraph("<b>Elaborado por</b>", ParagraphStyle('T1', parent=estilo_texto, fontName="Helvetica-Bold", fontSize=10))],
@@ -253,7 +253,7 @@ def generar_pdf():
     t_firma.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'LEFT'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('LINEBELOW', (0,0), (0,0), 1, COLOR_PRIMARIO),  # Línea de firma exacta debajo del trazo
+        ('LINEBELOW', (0,0), (0,0), 1, COLOR_PRIMARIO),
         ('PADDING', (0,0), (-1,-1), 4),
     ]))
     elementos.append(t_firma)
