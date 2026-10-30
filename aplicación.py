@@ -75,26 +75,35 @@ if fotos_cargadas:
         img_pil = PILImage.open(foto)
         with cols[i % 3]:
             st.image(img_pil, caption=f"Foto {i+1}", use_container_width=True)
-        # Guardar temporalmente para el PDF
         temp_path = f"foto_temp_{i}.png"
         img_pil.save(temp_path)
         lista_imagenes_temp.append(temp_path)
 
 st.markdown("---")
 
-# --- SECCIÓN 5: PIZARRA TÁCTIL PARA FIRMA ---
+# --- SECCIÓN 5: PIZARRA TÁCTIL PARA FIRMA CON BOTÓN DE BORRADO ---
 st.subheader("5. Firma del Responsable")
 st.markdown("Firma con tu dedo o lápiz en el siguiente recuadro:")
+
+# Control de estado para limpiar el canvas si se presiona el botón
+if 'limpiar_firma' not in st.session_state:
+    st.session_state.limpiar_firma = 0
+
+col_canvas, col_btn = st.columns([4, 1])
+with col_btn:
+    if st.button("🗑️ Borrar Firma"):
+        st.session_state.limpiar_firma += 1
+        st.rerun()
 
 canvas_result = st_canvas(
     fill_color="rgba(255, 255, 255, 0)",
     stroke_width=3,
     stroke_color="#000000",
     background_color="#FFFFFF",
-    height=140,
-    width=380,
+    height=130,
+    width=340,
     drawing_mode="freedraw",
-    key="canvas_firma",
+    key=f"canvas_firma_{st.session_state.limpiar_firma}",
 )
 
 st.markdown("---")
@@ -105,24 +114,21 @@ def generar_pdf():
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elementos = []
     
-    # Paleta de Colores Corporativa / Industrial
-    COLOR_PRIMARIO = colors.HexColor('#1B365D')  # Azul Marino Oscuro
-    COLOR_SECUNDARIO = colors.HexColor('#2C3E50') # Gris Acero
-    COLOR_FONDO_TABLA = colors.HexColor('#F2F4F7') # Gris muy claro
+    COLOR_PRIMARIO = colors.HexColor('#1B365D')
+    COLOR_SECUNDARIO = colors.HexColor('#2C3E50')
+    COLOR_FONDO_TABLA = colors.HexColor('#F2F4F7')
     COLOR_BORDE = colors.HexColor('#CBD5E1')
 
     styles = getSampleStyleSheet()
-    estilo_titulo = ParagraphStyle('TituloDoc', parent=styles['Heading1'], fontSize=15, textColor=COLOR_PRIMARIO, alignment=1, fontName="Helvetica-Bold", spaceAfter=6)
+    estilo_titulo = ParagraphStyle('TituloDoc', parent=styles['Heading1'], fontSize=15, textColor=COLOR_PRIMARIO, alignment=1, fontName="Helvetica-Bold", spaceAfter=4)
     estilo_subtitulo = ParagraphStyle('SubTituloDoc', parent=styles['Heading2'], fontSize=11, textColor=COLOR_PRIMARIO, fontName="Helvetica-Bold", spaceBefore=10, spaceAfter=4)
     estilo_texto = ParagraphStyle('TextoDoc', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#333333'), leading=12)
     estilo_etiqueta = ParagraphStyle('EtiquetaDoc', parent=styles['Normal'], fontSize=9, textColor=COLOR_PRIMARIO, fontName="Helvetica-Bold")
 
-    # Encabezado con estilo bloque corporativo
     elementos.append(Paragraph("INFORME TÉCNICO DE AVANCE DE OBRA", estilo_titulo))
-    elementos.append(Paragraph("Control de Operaciones y Faena en Terreno", ParagraphStyle('Sub', parent=estilo_titulo, fontSize=10, textColor=COLOR_SECUNDARIO)))
+    elementos.append(Paragraph("Control de Operaciones y Faena en Terreno", ParagraphStyle('Sub', parent=estilo_titulo, fontSize=10, textColor=COLOR_SECUNDARIO, alignment=1)))
     elementos.append(Spacer(1, 10))
 
-    # Tabla de Datos Generales (Estética y limpia)
     data_general = [
         [Paragraph("<b>Proyecto / Obra:</b>", estilo_etiqueta), Paragraph(proyecto, estilo_texto), Paragraph("<b>Fecha:</b>", estilo_etiqueta), Paragraph(str(fecha_informe), estilo_texto)],
         [Paragraph("<b>Cliente:</b>", estilo_etiqueta), Paragraph(cliente, estilo_texto), Paragraph("<b>N° Informe:</b>", estilo_etiqueta), Paragraph(n_informe, estilo_texto)],
@@ -139,7 +145,6 @@ def generar_pdf():
     elementos.append(t_general)
     elementos.append(Spacer(1, 10))
 
-    # Dotación y Recursos
     elementos.append(Paragraph("RECURSOS Y DOTACIÓN EN FAENA", estilo_subtitulo))
     data_recursos = [
         [Paragraph("<b>Personal Asignado:</b>", estilo_etiqueta), Paragraph(dotacion, estilo_texto)],
@@ -156,7 +161,6 @@ def generar_pdf():
     elementos.append(t_recursos)
     elementos.append(Spacer(1, 10))
 
-    # Descripción de Actividades
     elementos.append(Paragraph("DESCRIPCIÓN DE ACTIVIDADES E INCIDENCIAS", estilo_subtitulo))
     texto_actividad = descripcion_bruta if descripcion_bruta else "Sin observaciones registradas en la jornada."
     data_actividades = [[Paragraph(texto_actividad.replace('\n', '<br/>'), estilo_texto)]]
@@ -170,21 +174,17 @@ def generar_pdf():
     elementos.append(t_actividades)
     elementos.append(Spacer(1, 10))
 
-    # Registro Fotográfico en el PDF
     if lista_imagenes_temp:
         elementos.append(Paragraph("REGISTRO FOTOGRÁFICO", estilo_subtitulo))
         filas_fotos = []
         fila_actual = []
-        
         for i, img_path in enumerate(lista_imagenes_temp):
             img_pdf = RLImage(img_path, width=160, height=120)
             celda_foto = [img_pdf, Paragraph(f"<b>Figura {i+1}:</b> Evidencia en terreno", ParagraphStyle('Cap', parent=estilo_texto, fontSize=8, alignment=1))]
             fila_actual.append(celda_foto)
-            
             if len(fila_actual) == 2:
                 filas_fotos.append(fila_actual)
                 fila_actual = []
-        
         if fila_actual:
             while len(fila_actual) < 2:
                 fila_actual.append("")
@@ -202,20 +202,18 @@ def generar_pdf():
         elementos.append(t_fotos)
         elementos.append(Spacer(1, 10))
 
-    # Firma y Validación
     elementos.append(Paragraph("VALIDACIÓN Y FIRMA DEL RESPONSABLE", estilo_subtitulo))
     
     img_firma_path = None
-    if canvas_result.image_data is not None:
+    if canvas_result is not None and canvas_result.image_data is not None:
         img_data = canvas_result.image_data
-        # Verificar si se dibujó algo (no todo blanco)
         if np.any(img_data[:, :, 3] > 0):
             img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA")
             img_firma_path = "firma_canvas_temp.png"
             img_firma.save(img_firma_path)
 
     if img_firma_path:
-        firma_rl = RLImage(img_firma_path, width=140, height=50)
+        firma_rl = RLImage(img_firma_path, width=130, height=45)
     else:
         firma_rl = Paragraph("<i>(Sin firma registrada)</i>", estilo_texto)
 
