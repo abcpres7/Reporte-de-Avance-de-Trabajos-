@@ -13,7 +13,7 @@ from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 
 st.set_page_config(page_title="Informe de Terreno", page_icon="🏗️", layout="centered")
 
-# Estilo visual general en Streamlit
+# Estilo visual corporativo / industrial
 st.markdown("""
     <style>
     .main { background-color: #F8F9FA; }
@@ -90,42 +90,39 @@ if fotos_cargadas:
 
 st.markdown("---")
 
-# --- SECCIÓN 5: PIZARRA TÁCTIL PARA FIRMA SEGURA ---
+# --- SECCIÓN 5: PIZARRA TÁCTIL ESTABLE ---
 st.subheader("5. Firma del Responsable")
 st.markdown("Dibuja tu firma con el dedo o lápiz y luego presiona **'Guardar y Validar Firma'**:")
 
-if 'limpiar_firma' not in st.session_state:
-    st.session_state.limpiar_firma = 0
 if 'firma_guardada_path' not in st.session_state:
     st.session_state.firma_guardada_path = None
 
 col_canvas, col_btn = st.columns([4, 1])
 with col_btn:
     if st.button("🗑️ Borrar"):
-        st.session_state.limpiar_firma += 1
         st.session_state.firma_guardada_path = None
         st.rerun()
 
-# Lienzo simplificado y robusto sin parámetros conflictivos
+# Instancia robusta de st_canvas con parámetros tipados de forma estricta
 canvas_result = st_canvas(
-    stroke_width=4,
+    stroke_width=int(4),
     stroke_color="#1B365D",
     background_color="#FFFFFF",
-    height=140,
-    width=350,
+    height=int(140),
+    width=int(350),
     drawing_mode="freedraw",
     realtime_update=True,
-    key=f"canvas_firma_{st.session_state.limpiar_firma}",
+    key="canvas_firma_master",
 )
 
-# Botón para guardar y validar la firma con detección automática de trazos
+# Validación y persistencia segura de la firma en memoria de sesión
 if st.button("💾 Guardar y Validar Firma"):
     exito = False
     try:
-        if canvas_result is not None and canvas_result.image_data is not None:
+        if canvas_result is not None and getattr(canvas_result, "image_data", None) is not None:
             img_data = canvas_result.image_data
             if isinstance(img_data, np.ndarray) and img_data.size > 0:
-                # Verificamos si hay algún trazo oscuro sobre el fondo blanco
+                # Filtrado de píxeles para validar la existencia de trazos reales
                 if np.any(img_data[:, :, :3] < 250):
                     img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA").convert("RGB")
                     st.session_state.firma_guardada_path = "firma_guardada_final.png"
@@ -137,7 +134,7 @@ if st.button("💾 Guardar y Validar Firma"):
     if exito:
         st.success("¡Firma registrada y guardada con éxito para el informe!")
     else:
-        st.warning("No se detectó un trazo en la pizarra. Dibuja tu firma primero y vuelve a intentar.")
+        st.warning("No se detectó un trazo válido en la pizarra. Dibuja tu firma primero y vuelve a intentar.")
 
 if st.session_state.firma_guardada_path:
     st.image(st.session_state.firma_guardada_path, width=200, caption="Firma registrada para el informe")
