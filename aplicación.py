@@ -117,22 +117,23 @@ canvas_result = st_canvas(
     key=f"canvas_firma_{st.session_state.limpiar_firma}",
 )
 
-# Guardar firma capturando el evento de forma totalmente segura contra RuntimeError
+# Validación inteligente basada en detección de píxeles trazados
 if st.button("💾 Guardar y Validar Firma"):
     exito = False
     try:
-        # Intentamos obtener la imagen capturada sin consultar atributos bloqueantes
-        raw_data = getattr(canvas_result, "image_data", None)
-        if raw_data is not None and isinstance(raw_data, np.ndarray) and raw_data.size > 0:
-            img_firma = PILImage.fromarray(raw_data.astype('uint8'), mode="RGBA").convert("RGB")
-            st.session_state.firma_guardada_path = "firma_guardada_final.png"
-            img_firma.save(st.session_state.firma_guardada_path)
-            exito = True
+        if canvas_result is not None and canvas_result.image_data is not None:
+            img_data = canvas_result.image_data
+            # Verificamos si hay píxeles oscuros (trazos de firma) diferentes al fondo blanco
+            if np.any(img_data[:, :, :3] < 250):
+                img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA").convert("RGB")
+                st.session_state.firma_guardada_path = "firma_guardada_final.png"
+                img_firma.save(st.session_state.firma_guardada_path)
+                exito = True
     except Exception:
         exito = False
 
     if exito:
-        st.success("¡Firma registrada correctamente para el informe!")
+        st.success("¡Firma registrada y guardada con éxito para el informe!")
     else:
         st.warning("No se detectó un trazo en la pizarra. Dibuja tu firma primero y vuelve a intentar.")
 
