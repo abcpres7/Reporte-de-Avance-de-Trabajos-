@@ -3,8 +3,6 @@ import pandas as pd
 from datetime import datetime
 from io import BytesIO
 from PIL import Image as PILImage
-import numpy as np
-from streamlit_drawable_canvas import st_canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -90,51 +88,11 @@ if fotos_cargadas:
 
 st.markdown("---")
 
-# --- SECCIÓN 5: PIZARRA TÁCTIL ESTABLE ---
-st.subheader("5. Firma del Responsable")
-st.markdown("Dibuja tu firma con el dedo o lápiz y luego presiona **'Guardar y Validar Firma'**:")
+# --- SECCIÓN 5: VALIDACIÓN Y RESPONSABLE DE TERRENO ---
+st.subheader("5. Validación del Responsable")
+st.markdown("El informe se emitirá con el registro oficial de responsabilidad técnica:")
 
-if 'limpiar_firma' not in st.session_state:
-    st.session_state.limpiar_firma = 0
-if 'firma_guardada_path' not in st.session_state:
-    st.session_state.firma_guardada_path = None
-
-col_canvas, col_btn = st.columns([4, 1])
-with col_btn:
-    if st.button("🗑️ Borrar"):
-        st.session_state.limpiar_firma += 1
-        st.session_state.firma_guardada_path = None
-        st.rerun()
-
-canvas_result = st_canvas(
-    stroke_width=4,
-    stroke_color="#1B365D",
-    background_color="#FFFFFF",
-    height=140,
-    width=350,
-    drawing_mode="freedraw",
-    key=f"canvas_firma_{st.session_state.limpiar_firma}",
-)
-
-# Captura directa y sin bloqueos de la firma al presionar el botón
-if st.button("💾 Guardar y Validar Firma"):
-    try:
-        if canvas_result is not None and getattr(canvas_result, "image_data", None) is not None:
-            img_data = canvas_result.image_data
-            if isinstance(img_data, np.ndarray) and img_data.size > 0:
-                img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA").convert("RGB")
-                st.session_state.firma_guardada_path = "firma_guardada_final.png"
-                img_firma.save(st.session_state.firma_guardada_path)
-                st.success("¡Firma registrada y guardada con éxito para el informe!")
-        else:
-            # Fallback directo si la matriz no se expone al momento del clic
-            st.session_state.firma_guardada_path = None
-            st.warning("Por favor dibuja tu firma nuevamente en el recuadro blanco y presiona guardar.")
-    except Exception:
-        st.warning("Dibuja tu firma en la pizarra antes de guardar.")
-
-if st.session_state.firma_guardada_path:
-    st.image(st.session_state.firma_guardada_path, width=200, caption="Firma registrada para el informe")
+validar_automatico = st.checkbox("✅ Autorizar y validar informe digitalmente", value=True)
 
 st.markdown("---")
 
@@ -246,24 +204,24 @@ def generar_pdf():
         elementos.append(t_fotos)
         elementos.append(Spacer(1, 10))
 
-    elementos.append(Paragraph("VALIDACIÓN Y FIRMA DEL RESPONSABLE", estilo_subtitulo))
+    elementos.append(Paragraph("VALIDACIÓN Y RESPONSABLE DE TERRENO", estilo_subtitulo))
     
-    if st.session_state.firma_guardada_path:
-        firma_rl = RLImage(st.session_state.firma_guardada_path, width=150, height=55)
-    else:
-        firma_rl = Paragraph("<i>(Firma pendiente)</i>", estilo_texto)
-
+    estado_val = "<b>[ DOCUMENTO VALIDADO DIGITALMENTE ]</b>" if validar_automatico else "<i>(Pendiente de validación)</i>"
+    
     data_firma = [
-        [firma_rl],
+        [Paragraph(estado_val, ParagraphStyle('ValStyle', parent=estilo_texto, alignment=TA_CENTER, textColor=COLOR_PRIMARIO))],
+        [Spacer(1, 15)],
         [Paragraph("<b>Elaborado por</b>", ParagraphStyle('T1', parent=estilo_texto, fontName="Helvetica-Bold", fontSize=10))],
         [Paragraph(f"{inspector} · {empresa_contratista}", ParagraphStyle('T2', parent=estilo_texto, fontSize=9, textColor=colors.HexColor('#555555')))]
     ]
-    t_firma = Table(data_firma, colWidths=[220])
+    t_firma = Table(data_firma, colWidths=[240])
     t_firma.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'LEFT'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('LINEBELOW', (0,0), (0,0), 1, COLOR_PRIMARIO),
-        ('PADDING', (0,0), (-1,-1), 4),
+        ('LINEBELOW', (0,2), (0,2), 1, COLOR_PRIMARIO),
+        ('BACKGROUND', (0,0), (-1,-1), COLOR_FONDO_TABLA),
+        ('BOX', (0,0), (-1,-1), 1, COLOR_BORDE),
+        ('PADDING', (0,0), (-1,-1), 8),
     ]))
     elementos.append(t_firma)
 
