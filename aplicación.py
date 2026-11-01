@@ -106,9 +106,8 @@ with col_btn:
         st.session_state.firma_guardada_path = None
         st.rerun()
 
-# Se incorpora realtime_update=True para sincronizar los trazos al instante
+# Lienzo simplificado y robusto sin parámetros conflictivos
 canvas_result = st_canvas(
-    fill_color="rgba(255, 255, 255, 1)",
     stroke_width=4,
     stroke_color="#1B365D",
     background_color="#FFFFFF",
@@ -119,17 +118,19 @@ canvas_result = st_canvas(
     key=f"canvas_firma_{st.session_state.limpiar_firma}",
 )
 
-# Validación con lectura sincronizada en tiempo real
+# Botón para guardar y validar la firma con detección automática de trazos
 if st.button("💾 Guardar y Validar Firma"):
     exito = False
     try:
         if canvas_result is not None and canvas_result.image_data is not None:
             img_data = canvas_result.image_data
             if isinstance(img_data, np.ndarray) and img_data.size > 0:
-                img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA").convert("RGB")
-                st.session_state.firma_guardada_path = "firma_guardada_final.png"
-                img_firma.save(st.session_state.firma_guardada_path)
-                exito = True
+                # Verificamos si hay algún trazo oscuro sobre el fondo blanco
+                if np.any(img_data[:, :, :3] < 250):
+                    img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA").convert("RGB")
+                    st.session_state.firma_guardada_path = "firma_guardada_final.png"
+                    img_firma.save(st.session_state.firma_guardada_path)
+                    exito = True
     except Exception:
         exito = False
 
