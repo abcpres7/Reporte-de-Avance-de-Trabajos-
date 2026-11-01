@@ -90,17 +90,20 @@ if fotos_cargadas:
 
 st.markdown("---")
 
-# --- SECCIÓN 5: PIZARRA TÁCTIL PARA FIRMA ---
+# --- SECCIÓN 5: PIZARRA TÁCTIL PARA FIRMA SEGURA ---
 st.subheader("5. Firma del Responsable")
-st.markdown("Dibuja tu firma claramente con el dedo o lápiz en el recuadro:")
+st.markdown("Dibuja tu firma con el dedo o lápiz y luego haz clic en **'Guardar Firma'**:")
 
 if 'limpiar_firma' not in st.session_state:
     st.session_state.limpiar_firma = 0
+if 'firma_guardada_path' not in st.session_state:
+    st.session_state.firma_guardada_path = None
 
 col_canvas, col_btn = st.columns([4, 1])
 with col_btn:
     if st.button("🗑️ Borrar"):
         st.session_state.limpiar_firma += 1
+        st.session_state.firma_guardada_path = None
         st.rerun()
 
 canvas_result = st_canvas(
@@ -113,6 +116,20 @@ canvas_result = st_canvas(
     drawing_mode="freedraw",
     key=f"canvas_firma_{st.session_state.limpiar_firma}",
 )
+
+# Botón explicito para registrar y congelar la firma en memoria
+if st.button("💾 Guardar y Validar Firma"):
+    if canvas_result.image_data is not None:
+        img_data = canvas_result.image_data
+        if isinstance(img_data, np.ndarray) and img_data.size > 0:
+            img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA").convert("RGB")
+            # Guardamos la ruta permanente en la sesión
+            st.session_state.firma_guardada_path = "firma_guardada_final.png"
+            img_firma.save(st.session_state.firma_guardada_path)
+            st.success("¡Firma guardada con éxito en el sistema! Ya puedes generar tu PDF.")
+
+if st.session_state.firma_guardada_path:
+    st.image(st.session_state.firma_guardada_path, width=200, caption="Firma registrada para el informe")
 
 st.markdown("---")
 
@@ -226,23 +243,11 @@ def generar_pdf():
 
     elementos.append(Paragraph("VALIDACIÓN Y FIRMA DEL RESPONSABLE", estilo_subtitulo))
     
-    # Extracción directa y blindada de la matriz de la firma del canvas
-    img_firma_path = None
-    try:
-        if canvas_result is not None and canvas_result.image_data is not None:
-            img_data = canvas_result.image_data
-            # Comprobamos que el canvas tenga datos dibujados transformándolos a imagen PIL
-            if isinstance(img_data, np.ndarray) and img_data.size > 0:
-                img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA").convert("RGB")
-                img_firma_path = "firma_canvas_temp.png"
-                img_firma.save(img_firma_path)
-    except Exception:
-        img_firma_path = None
-
-    if img_firma_path:
-        firma_rl = RLImage(img_firma_path, width=150, height=55)
+    # Tomamos la firma directamente desde el archivo guardado en sesión de forma segura
+    if st.session_state.firma_guardada_path:
+        firma_rl = RLImage(st.session_state.firma_guardada_path, width=150, height=55)
     else:
-        firma_rl = Paragraph("<i>(Firma pendiente)</i>", estilo_texto)
+        firma_rl = Paragraph("<i>(Firma pendiente - Guarde su firma antes de generar)</i>", estilo_texto)
 
     data_firma = [
         [firma_rl],
