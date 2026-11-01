@@ -103,15 +103,14 @@ with col_btn:
         st.session_state.firma_guardada_path = None
         st.rerun()
 
-# Instancia robusta de st_canvas con parámetros tipados de forma estricta
+# Instancia robusta de st_canvas sin parámetros incompatibles
 canvas_result = st_canvas(
-    stroke_width=int(4),
+    stroke_width=4,
     stroke_color="#1B365D",
     background_color="#FFFFFF",
-    height=int(140),
-    width=int(350),
+    height=140,
+    width=350,
     drawing_mode="freedraw",
-    realtime_update=True,
     key="canvas_firma_master",
 )
 
