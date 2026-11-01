@@ -94,16 +94,18 @@ st.markdown("---")
 st.subheader("5. Firma del Responsable")
 st.markdown("Dibuja tu firma con el dedo o lápiz y luego presiona **'Guardar y Validar Firma'**:")
 
+if 'limpiar_firma' not in st.session_state:
+    st.session_state.limpiar_firma = 0
 if 'firma_guardada_path' not in st.session_state:
     st.session_state.firma_guardada_path = None
 
 col_canvas, col_btn = st.columns([4, 1])
 with col_btn:
     if st.button("🗑️ Borrar"):
+        st.session_state.limpiar_firma += 1
         st.session_state.firma_guardada_path = None
         st.rerun()
 
-# Instancia robusta de st_canvas sin parámetros incompatibles
 canvas_result = st_canvas(
     stroke_width=4,
     stroke_color="#1B365D",
@@ -111,29 +113,25 @@ canvas_result = st_canvas(
     height=140,
     width=350,
     drawing_mode="freedraw",
-    key="canvas_firma_master",
+    key=f"canvas_firma_{st.session_state.limpiar_firma}",
 )
 
-# Validación y persistencia segura de la firma en memoria de sesión
+# Captura directa y sin bloqueos de la firma al presionar el botón
 if st.button("💾 Guardar y Validar Firma"):
-    exito = False
     try:
         if canvas_result is not None and getattr(canvas_result, "image_data", None) is not None:
             img_data = canvas_result.image_data
             if isinstance(img_data, np.ndarray) and img_data.size > 0:
-                # Filtrado de píxeles para validar la existencia de trazos reales
-                if np.any(img_data[:, :, :3] < 250):
-                    img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA").convert("RGB")
-                    st.session_state.firma_guardada_path = "firma_guardada_final.png"
-                    img_firma.save(st.session_state.firma_guardada_path)
-                    exito = True
+                img_firma = PILImage.fromarray(img_data.astype('uint8'), mode="RGBA").convert("RGB")
+                st.session_state.firma_guardada_path = "firma_guardada_final.png"
+                img_firma.save(st.session_state.firma_guardada_path)
+                st.success("¡Firma registrada y guardada con éxito para el informe!")
+        else:
+            # Fallback directo si la matriz no se expone al momento del clic
+            st.session_state.firma_guardada_path = None
+            st.warning("Por favor dibuja tu firma nuevamente en el recuadro blanco y presiona guardar.")
     except Exception:
-        exito = False
-
-    if exito:
-        st.success("¡Firma registrada y guardada con éxito para el informe!")
-    else:
-        st.warning("No se detectó un trazo válido en la pizarra. Dibuja tu firma primero y vuelve a intentar.")
+        st.warning("Dibuja tu firma en la pizarra antes de guardar.")
 
 if st.session_state.firma_guardada_path:
     st.image(st.session_state.firma_guardada_path, width=200, caption="Firma registrada para el informe")
